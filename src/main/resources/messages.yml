@@ -1,0 +1,8 @@
+already-teleporting: "<red>You are already teleporting!"
+teleporting: "<green>Teleporting... Do not move!"
+teleporting-cancelled: "<red>Teleporting cancelled!"
+no-valid-location: "<red>No valid location found!"
+cooldown: "<red>This action is on cooldown"
+teleported: "<green>Teleported!"
+reload-failed: "<red>An error occurred while reloading the config!"
+teleporting-other: "<green>Teleporting <target>..."

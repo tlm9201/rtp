@@ -1,0 +1,8 @@
+name: rtp
+version: '1.0.0-SNAPSHOT'
+main: com.timomcgrath.rtp.RTP
+api-version: '1.21'
+authors: [ tlm920 ]
+description: Randomly teleport to a new location.
+folia-supported: true
+softdepend: [ Towny ]
