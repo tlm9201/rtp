@@ -1,5 +1,6 @@
 package com.timomcgrath.rtp
 
+import com.palmergames.bukkit.towny.TownyAPI
 import com.timomcgrath.rtp.plugin.PluginHookProvider
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
 import net.kyori.adventure.sound.Sound
@@ -54,12 +55,21 @@ object RTPHandler {
 
             rtping.remove(player.uniqueId)
 
-            player.scheduler.run(RTP.instance, {
-                rtpNow(player)
-            }, null)
+            rtpNow(player)
         }, Settings.delay, TimeUnit.SECONDS)
 
         playPreRtpEffects(player)
+    }
+
+    fun getSafeLocation(world: World) : Location? {
+        for (i in 0 until Settings.maxRolls) {
+            val location = getRandomLocation(world)
+            if (PluginHookProvider.dispatchAll(location)) {
+                return location
+            }
+        }
+
+        return null
     }
 
     fun rtpOnFirstJoin(player: Player) {
@@ -68,29 +78,41 @@ object RTPHandler {
         }
     }
 
-    fun rtpOnRespawn(player: Player) {
-        if (Settings.rtpOnRespawn) {
-            rtp(player)
+
+    fun rtpOnRespawn(player: Player) : Boolean {
+        if (!Settings.rtpOnRespawn) {
+            return false
         }
+
+        if (Bukkit.getPluginManager().isPluginEnabled("Towny")) {
+            return TownyAPI.getInstance().getTown(player) == null
+        }
+
+        return true
     }
 
     fun getRandomLocation(world: World) : Location {
         val corner1 = Settings.corner1
         val corner2 = Settings.corner2
 
+        val x: Int?
+        val z : Int?
+
         if (corner1[0] == corner2[0] && corner1[1] == corner2[1]) {
             // default to worldborder bounds
             val border = world.worldBorder
             val size = border.size / 2
 
-            val x = (border.center.x - size + Math.random() * border.size).toInt()
-            val z = (border.center.z - size + Math.random() * border.size).toInt()
-            return world.getHighestBlockAt(x, z).location.add(0.5, 1.0, 0.5)
+            x = (border.center.x - size + Math.random() * border.size).toInt()
+            z = (border.center.z - size + Math.random() * border.size).toInt()
+        } else {
+            x = (corner1[0] + Math.random() * (corner2[0] - corner1[0])).toInt()
+            z = (corner1[1] + Math.random() * (corner2[1] - corner1[1])).toInt()
         }
 
-        val x = (corner1[0] + Math.random() * (corner2[0] - corner1[0])).toInt()
-        val z = (corner1[1] + Math.random() * (corner2[1] - corner1[1])).toInt()
-        return world.getHighestBlockAt(x, z).location.add(0.5, 1.0, 0.5)
+        val chunk = world.getChunkAtAsync(x shr 4, z shr 4).thenApply { it.getChunkSnapshot(true, false, false) }.join()
+        val y = chunk.getHighestBlockYAt(x and 0xF, z and 0xF)
+        return Location(world, x.toDouble(), y.toDouble(), z.toDouble()).add(0.5, 1.0, 0.5)
     }
 
     fun playTeleportEffects(player: Player) {
