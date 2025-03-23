@@ -53,7 +53,10 @@ object RTPHandler {
             }
 
             rtping.remove(player.uniqueId)
-            rtpNow(player)
+
+            player.scheduler.run(RTP.instance, {
+                rtpNow(player)
+            }, null)
         }, Settings.delay, TimeUnit.SECONDS)
 
         playPreRtpEffects(player)
