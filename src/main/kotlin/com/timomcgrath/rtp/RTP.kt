@@ -36,6 +36,7 @@ class RTP : JavaPlugin() {
     override fun reloadConfig() {
         super.reloadConfig()
         Settings.load(config)
+        Settings.save(config)
     }
 
     private fun saveAndWriteConfig() {

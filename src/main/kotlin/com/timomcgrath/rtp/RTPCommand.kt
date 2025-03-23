@@ -17,6 +17,7 @@ object RTPCommand {
                 .executes {
                     try {
                         RTP.instance.reloadConfig()
+                        Messaging.send(it.source.sender, "reload-success")
                     } catch (e: Exception) {
                         Messaging.send(it.source.sender, "reload-failed")
                         e.printStackTrace()

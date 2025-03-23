@@ -41,8 +41,6 @@ object RTPHandler {
             return
         }
 
-        Messaging.send(player, "teleporting")
-
         rtping.add(player.uniqueId)
 
         var cancelOnMove: ScheduledTask? = null
@@ -57,6 +55,8 @@ object RTPHandler {
             rtping.remove(player.uniqueId)
             rtpNow(player)
         }, Settings.delay, TimeUnit.SECONDS)
+
+        playPreRtpEffects(player)
     }
 
     fun rtpOnFirstJoin(player: Player) {
@@ -75,6 +75,16 @@ object RTPHandler {
         val corner1 = Settings.corner1
         val corner2 = Settings.corner2
 
+        if (corner1[0] == corner2[0] && corner1[1] == corner2[1]) {
+            // default to worldborder bounds
+            val border = world.worldBorder
+            val size = border.size / 2
+
+            val x = (border.center.x - size + Math.random() * border.size).toInt()
+            val z = (border.center.z - size + Math.random() * border.size).toInt()
+            return world.getHighestBlockAt(x, z).location.add(0.5, 1.0, 0.5)
+        }
+
         val x = (corner1[0] + Math.random() * (corner2[0] - corner1[0])).toInt()
         val z = (corner1[1] + Math.random() * (corner2[1] - corner1[1])).toInt()
         return world.getHighestBlockAt(x, z).location.add(0.5, 1.0, 0.5)
@@ -84,6 +94,11 @@ object RTPHandler {
         player.playSound(Sound.sound(org.bukkit.Sound.ENTITY_GENERIC_EXPLODE, Sound.Source.PLAYER, 1.0f, 1.0f))
         player.addPotionEffect(PotionEffect(org.bukkit.potion.PotionEffectType.BLINDNESS, 20, 1))
         Messaging.title(player, "teleported")
+    }
+
+    fun playPreRtpEffects(player: Player) {
+        player.playSound(Sound.sound(org.bukkit.Sound.ENTITY_CREEPER_PRIMED, Sound.Source.PLAYER, 1.0f, 1.0f))
+        Messaging.send(player, "teleporting")
     }
 
     fun applyCooldown(uuid: UUID) {
