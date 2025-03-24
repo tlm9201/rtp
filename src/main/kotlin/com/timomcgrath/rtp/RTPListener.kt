@@ -27,7 +27,7 @@ class RTPListener : Listener {
         val player = event.player
 
         if (RTPHandler.rtpOnRespawn(player)) {
-            Bukkit.getAsyncScheduler().runDelayed(RTP.instance, { RTPHandler.rtpNow(player)}, 1, TimeUnit.SECONDS)
+            Bukkit.getAsyncScheduler().runDelayed(RTP.instance, { RTPHandler.rtpNow(player, false)}, 1, TimeUnit.SECONDS)
         }
     }
 

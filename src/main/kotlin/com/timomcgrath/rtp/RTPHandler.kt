@@ -7,6 +7,7 @@ import net.kyori.adventure.sound.Sound
 import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.World
+import org.bukkit.block.Block
 import org.bukkit.entity.Player
 import org.bukkit.potion.PotionEffect
 import java.util.UUID
@@ -16,8 +17,8 @@ object RTPHandler {
     val cooldowns = mutableSetOf<UUID>()
     val rtping = mutableSetOf<UUID>()
 
-    fun rtpNow(player: Player) {
-        if (cooldowns.contains(player.uniqueId)) {
+    fun rtpNow(player: Player, useCooldown: Boolean = true) {
+        if (useCooldown && cooldowns.contains(player.uniqueId)) {
             Messaging.send(player, "cooldown")
             return
         }
@@ -26,7 +27,7 @@ object RTPHandler {
             val location = getRandomLocation(player.world)
             if (PluginHookProvider.dispatchAll(location)) {
                 player.teleportAsync(location).thenRun {
-                    applyCooldown(player.uniqueId)
+                    if (useCooldown) applyCooldown(player.uniqueId)
                     playTeleportEffects(player)
                 }
                 return
@@ -64,12 +65,20 @@ object RTPHandler {
     fun getSafeLocation(world: World) : Location? {
         for (i in 0 until Settings.maxRolls) {
             val location = getRandomLocation(world)
-            if (PluginHookProvider.dispatchAll(location)) {
+            if (!isSafeBlock(location.block)) {
+                continue
+            }
+
+            if (PluginHookProvider.dispatchAll(location.add(0.5, 1.0, 0.5))) {
                 return location
             }
         }
 
         return null
+    }
+
+    fun isSafeBlock(block: Block) : Boolean {
+        return block.isSolid
     }
 
     fun rtpOnFirstJoin(player: Player) {
@@ -112,7 +121,7 @@ object RTPHandler {
 
         val chunk = world.getChunkAtAsync(x shr 4, z shr 4).thenApply { it.getChunkSnapshot(true, false, false) }.join()
         val y = chunk.getHighestBlockYAt(x and 0xF, z and 0xF)
-        return Location(world, x.toDouble(), y.toDouble(), z.toDouble()).add(0.5, 1.0, 0.5)
+        return Location(world, x.toDouble(), y.toDouble(), z.toDouble())
     }
 
     fun playTeleportEffects(player: Player) {
