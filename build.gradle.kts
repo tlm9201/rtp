@@ -1,6 +1,8 @@
 plugins {
     kotlin("jvm") version "2.1.20"
     id("com.github.johnrengelman.shadow") version "8.1.1"
+    `java-library`
+    `maven-publish`
 }
 
 group = "com.timomcgrath"
@@ -39,5 +41,13 @@ tasks.processResources {
     filteringCharset = "UTF-8"
     filesMatching("plugin.yml") {
         expand(props)
+    }
+}
+
+
+publishing {
+    publications.create<MavenPublication>("maven") {
+        from(components["java"])
+        artifactId = "rtp"
     }
 }

@@ -5,6 +5,8 @@ import io.papermc.paper.command.brigadier.CommandSourceStack
 import io.papermc.paper.command.brigadier.Commands
 import io.papermc.paper.command.brigadier.argument.ArgumentTypes
 import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver
+import org.bukkit.Bukkit
+import org.bukkit.GameMode
 import org.bukkit.entity.Player
 
 @Suppress("UnstableApiUsage")
@@ -37,7 +39,13 @@ object RTPCommand {
             .requires { it.sender.hasPermission(Permissions.SELF.permission) }
             .executes {
                 val player = it.source.sender as? Player ?: return@executes 0
-                RTPHandler.rtp(player)
+                val event = PreRTPEvent(player)
+                Bukkit.getPluginManager().callEvent(event)
+                if (!event.isCancelled || player.gameMode == GameMode.CREATIVE) {
+                    RTPHandler.rtp(player)
+                } else if (!event.cancelMessage.isEmpty()) {
+                    player.sendMessage(event.cancelMessage)
+                }
                 1
             }
             .build()
