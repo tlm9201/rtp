@@ -5,6 +5,7 @@ import com.timomcgrath.rtp.plugin.PluginHookProvider
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
 import net.kyori.adventure.sound.Sound
 import org.bukkit.Bukkit
+import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.World
 import org.bukkit.block.Block
@@ -18,7 +19,7 @@ object RTPHandler {
     val rtping = mutableSetOf<UUID>()
 
     fun rtpNow(player: Player, useCooldown: Boolean = true) {
-        if (useCooldown && cooldowns.contains(player.uniqueId)) {
+        if (useCooldown && player.gameMode != GameMode.CREATIVE && cooldowns.contains(player.uniqueId)) {
             Messaging.send(player, "cooldown")
             return
         }
