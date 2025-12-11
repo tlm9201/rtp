@@ -8,10 +8,9 @@ import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.World
-import org.bukkit.block.Block
 import org.bukkit.entity.Player
 import org.bukkit.potion.PotionEffect
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.TimeUnit
 
 object RTPHandler {
@@ -39,6 +38,10 @@ object RTPHandler {
     }
 
     fun rtp(player: Player) {
+        rtp(player, false)
+    }
+
+    fun rtp(player: Player, ignoreMove: Boolean) {
         if (rtping.contains(player.uniqueId)) {
             Messaging.send(player, "already-teleporting")
             return
@@ -47,7 +50,7 @@ object RTPHandler {
         rtping.add(player.uniqueId)
 
         var cancelOnMove: ScheduledTask? = null
-        if (Settings.cancelOnMove) cancelOnMove = cancelOnMove(player.uniqueId, player.location)
+        if (Settings.cancelOnMove && !ignoreMove) cancelOnMove = cancelOnMove(player.uniqueId, player.location)
 
         Bukkit.getAsyncScheduler().runDelayed(RTP.instance, {
             cancelOnMove?.cancel()
@@ -63,33 +66,14 @@ object RTPHandler {
         playPreRtpEffects(player)
     }
 
-    fun getSafeLocation(world: World) : Location? {
-        for (i in 0 until Settings.maxRolls) {
-            val location = getRandomLocation(world)
-            if (!isSafeBlock(location.block)) {
-                continue
-            }
-
-            if (PluginHookProvider.dispatchAll(location.add(0.5, 1.0, 0.5))) {
-                return location
-            }
-        }
-
-        return null
-    }
-
-    fun isSafeBlock(block: Block) : Boolean {
-        return block.isSolid
-    }
-
     fun rtpOnFirstJoin(player: Player) {
         if (Settings.rtpOnFirstJoin) {
-            rtp(player)
+            rtp(player, true)
         }
     }
 
 
-    fun rtpOnRespawn(player: Player) : Boolean {
+    fun rtpOnRespawn(player: Player): Boolean {
         if (!Settings.rtpOnRespawn) {
             return false
         }
@@ -101,12 +85,38 @@ object RTPHandler {
         return true
     }
 
-    fun getRandomLocation(world: World) : Location {
+    fun getRandomLocation(world: World): Location {
         val corner1 = Settings.corner1
         val corner2 = Settings.corner2
 
-        val x: Int?
-        val z : Int?
+        for (i in 0 until Settings.maxRolls) {
+            val x: Int
+            val z: Int
+
+            if (corner1[0] == corner2[0] && corner1[1] == corner2[1]) {
+                // default to worldborder bounds
+                val border = world.worldBorder
+                val size = border.size / 2
+
+                x = (border.center.x - size + Math.random() * border.size).toInt()
+                z = (border.center.z - size + Math.random() * border.size).toInt()
+            } else {
+                x = (corner1[0] + Math.random() * (corner2[0] - corner1[0])).toInt()
+                z = (corner1[1] + Math.random() * (corner2[1] - corner1[1])).toInt()
+            }
+
+            val chunk =
+                world.getChunkAtAsync(x shr 4, z shr 4).thenApply { it.getChunkSnapshot(true, false, false) }.join()
+            val y = chunk.getHighestBlockYAt(x and 0xF, z and 0xF)
+            val location = Location(world, x.toDouble(), y.toDouble(), z.toDouble())
+
+            if (!location.block.isSolid) {
+                return location
+            }
+        }
+
+        val x: Int
+        val z: Int
 
         if (corner1[0] == corner2[0] && corner1[1] == corner2[1]) {
             // default to worldborder bounds
@@ -147,7 +157,7 @@ object RTPHandler {
         rtping.remove(uuid)
     }
 
-    fun cancelOnMove(uuid: UUID, origin: Location) : ScheduledTask {
+    fun cancelOnMove(uuid: UUID, origin: Location): ScheduledTask {
         return Bukkit.getAsyncScheduler().runAtFixedRate(RTP.instance, {
             val player = Bukkit.getPlayer(uuid) ?: return@runAtFixedRate
             if (!rtping.contains(uuid)) {
