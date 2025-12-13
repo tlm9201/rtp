@@ -23,18 +23,20 @@ object RTPHandler {
             return
         }
 
-        for (i in 0 until Settings.maxRolls) {
-            val location = getRandomLocation(player.world)
-            if (PluginHookProvider.dispatchAll(location)) {
-                player.teleportAsync(location).thenRun {
-                    if (useCooldown) applyCooldown(player.uniqueId)
-                    playTeleportEffects(player)
+        player.scheduler.run(RTP.instance, {
+            for (i in 0 until Settings.maxRolls) {
+                val location = getRandomLocation(player.world)
+                if (PluginHookProvider.dispatchAll(location)) {
+                    player.teleportAsync(location).thenRun {
+                        if (useCooldown) applyCooldown(player.uniqueId)
+                        playTeleportEffects(player)
+                    }
+                    continue
                 }
-                return
             }
-        }
 
-        Messaging.send(player, "no-valid-location")
+            Messaging.send(player, "no-valid-location")
+        }, null)
     }
 
     fun rtp(player: Player) {
