@@ -41,7 +41,7 @@ object RTPCommand {
                 val player = it.source.sender as? Player ?: return@executes 0
                 val event = PreRTPEvent(player)
                 Bukkit.getPluginManager().callEvent(event)
-                if (!event.isCancelled || player.gameMode == GameMode.CREATIVE) {
+                if (!event.isCancelled || player.gameMode == GameMode.CREATIVE || player.gameMode == GameMode.SPECTATOR) {
                     RTPHandler.rtp(player)
                 } else if (!event.cancelMessage.isEmpty()) {
                     player.sendMessage(event.cancelMessage)
