@@ -19,6 +19,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("io.github.townyadvanced.commentedconfiguration:CommentedConfiguration:1.0.2")
     compileOnly("com.palmergames.bukkit.towny:towny:0.101.1.0")
+    implementation("fr.formiko.mc.biomeutils:biomeutils:1.1.8")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 }
 

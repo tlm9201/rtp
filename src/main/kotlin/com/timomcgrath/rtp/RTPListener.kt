@@ -1,5 +1,6 @@
 package com.timomcgrath.rtp
 
+import com.palmergames.bukkit.towny.TownyAPI
 import org.bukkit.Bukkit
 import org.bukkit.entity.EntityType
 import org.bukkit.event.EventHandler
@@ -26,8 +27,10 @@ class RTPListener : Listener {
     fun onRespawn(event: PlayerRespawnEvent) {
         val player = event.player
 
-        if (RTPHandler.rtpOnRespawn(player)) {
-            Bukkit.getAsyncScheduler().runDelayed(RTP.instance, { RTPHandler.rtpNow(player, false)}, 1, TimeUnit.SECONDS)
+        if (RTPHandler.rtpOnRespawn(player) && player.respawnLocation == null) {
+            val towny = Bukkit.getPluginManager().isPluginEnabled("Towny")
+            if (!towny || (!TownyAPI.getInstance().getResident(player)?.hasTown()!!))
+                Bukkit.getAsyncScheduler().runDelayed(RTP.instance, { RTPHandler.rtpNow(player, false)}, 1, TimeUnit.SECONDS)
         }
     }
 

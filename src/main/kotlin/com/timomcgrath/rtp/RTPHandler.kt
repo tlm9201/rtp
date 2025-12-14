@@ -2,6 +2,7 @@ package com.timomcgrath.rtp
 
 import com.palmergames.bukkit.towny.TownyAPI
 import com.timomcgrath.rtp.plugin.PluginHookProvider
+import fr.formiko.mc.biomeutils.NMSBiomeUtils
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
 import net.kyori.adventure.sound.Sound
 import org.bukkit.Bukkit
@@ -31,7 +32,7 @@ object RTPHandler {
                         if (useCooldown) applyCooldown(player.uniqueId)
                         playTeleportEffects(player)
                     }
-                    continue
+                    return@run
                 }
             }
 
@@ -90,6 +91,7 @@ object RTPHandler {
     fun getRandomLocation(world: World): Location {
         val corner1 = Settings.corner1
         val corner2 = Settings.corner2
+        val minHeight = world.minHeight
 
         for (i in 0 until Settings.maxRolls) {
             val x: Int
@@ -109,10 +111,14 @@ object RTPHandler {
 
             val chunk =
                 world.getChunkAtAsync(x shr 4, z shr 4).thenApply { it.getChunkSnapshot(true, false, false) }.join()
-            val y = chunk.getHighestBlockYAt(x and 0xF, z and 0xF)
-            val location = Location(world, x.toDouble(), y.toDouble(), z.toDouble())
+            val localX = x and 0xF
+            val localZ = z and 0xF
+            val y = chunk.getHighestBlockYAt(localX, localZ)
+            if (y < minHeight) continue
+            val location = Location(world, x.toDouble(), (y + 1).toDouble(), z.toDouble())
 
-            if (!location.block.isSolid) {
+//            if (!NMSBiomeUtils.matchTag(location, "minecraft:is_ocean") && chunk.getBlockType(localX, y, localZ).isSolid) {
+            if (chunk.getBlockType(localX, y, localZ).isSolid) {
                 return location
             }
         }
@@ -133,8 +139,12 @@ object RTPHandler {
         }
 
         val chunk = world.getChunkAtAsync(x shr 4, z shr 4).thenApply { it.getChunkSnapshot(true, false, false) }.join()
-        val y = chunk.getHighestBlockYAt(x and 0xF, z and 0xF)
-        return Location(world, x.toDouble(), y.toDouble(), z.toDouble())
+        val localX = x and 0xF
+        val localZ = z and 0xF
+        val y = chunk.getHighestBlockYAt(localX, localZ)
+        var adjustedY = y + 1
+        if (y < minHeight) adjustedY = minHeight + 1
+        return Location(world, x.toDouble(), adjustedY.toDouble(), z.toDouble())
     }
 
     fun playTeleportEffects(player: Player) {
