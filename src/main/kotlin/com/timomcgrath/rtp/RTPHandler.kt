@@ -2,12 +2,16 @@ package com.timomcgrath.rtp
 
 import com.palmergames.bukkit.towny.TownyAPI
 import com.timomcgrath.rtp.plugin.PluginHookProvider
-import fr.formiko.mc.biomeutils.NMSBiomeUtils
+import io.papermc.paper.registry.RegistryAccess
+import io.papermc.paper.registry.RegistryKey
+import io.papermc.paper.registry.keys.tags.BiomeTagKeys
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
 import net.kyori.adventure.sound.Sound
+import org.bukkit.block.Biome
 import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.Location
+import org.bukkit.NamespacedKey
 import org.bukkit.World
 import org.bukkit.entity.Player
 import org.bukkit.potion.PotionEffect
@@ -17,9 +21,10 @@ import java.util.concurrent.TimeUnit
 object RTPHandler {
     val cooldowns = mutableSetOf<UUID>()
     val rtping = mutableSetOf<UUID>()
+    val isOcean = RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).getTag(BiomeTagKeys.create(NamespacedKey("minecraft", "is_ocean")))
 
     fun rtpNow(player: Player, useCooldown: Boolean = true) {
-        if (useCooldown && player.gameMode != GameMode.CREATIVE && cooldowns.contains(player.uniqueId)) {
+        if (useCooldown && player.gameMode != GameMode.CREATIVE && player.gameMode != GameMode.SPECTATOR && cooldowns.contains(player.uniqueId)) {
             Messaging.send(player, "cooldown")
             return
         }
@@ -110,15 +115,14 @@ object RTPHandler {
             }
 
             val chunk =
-                world.getChunkAtAsync(x shr 4, z shr 4).thenApply { it.getChunkSnapshot(true, false, false) }.join()
+                world.getChunkAtAsync(x shr 4, z shr 4).thenApply { it.getChunkSnapshot(true, true, false) }.join()
             val localX = x and 0xF
             val localZ = z and 0xF
             val y = chunk.getHighestBlockYAt(localX, localZ)
             if (y < minHeight) continue
             val location = Location(world, x.toDouble(), (y + 1).toDouble(), z.toDouble())
 
-//            if (!NMSBiomeUtils.matchTag(location, "minecraft:is_ocean") && chunk.getBlockType(localX, y, localZ).isSolid) {
-            if (chunk.getBlockType(localX, y, localZ).isSolid) {
+            if (!(isOcean.contains(RegistryKey.BIOME.typedKey(chunk.getBiome(localX, y, localZ).key()))) && chunk.getBlockType(localX, y, localZ).isSolid) {
                 return location
             }
         }
