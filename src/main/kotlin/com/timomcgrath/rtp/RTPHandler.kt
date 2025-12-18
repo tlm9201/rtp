@@ -7,41 +7,43 @@ import io.papermc.paper.registry.RegistryKey
 import io.papermc.paper.registry.keys.tags.BiomeTagKeys
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
 import net.kyori.adventure.sound.Sound
-import org.bukkit.block.Biome
-import org.bukkit.Bukkit
-import org.bukkit.GameMode
-import org.bukkit.Location
-import org.bukkit.NamespacedKey
-import org.bukkit.World
+import org.bukkit.*
 import org.bukkit.entity.Player
 import org.bukkit.potion.PotionEffect
 import java.util.*
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
 object RTPHandler {
     val cooldowns = mutableSetOf<UUID>()
     val rtping = mutableSetOf<UUID>()
-    val isOcean = RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME).getTag(BiomeTagKeys.create(NamespacedKey("minecraft", "is_ocean")))
+    val isOcean = RegistryAccess.registryAccess().getRegistry(RegistryKey.BIOME)
+        .getTag(BiomeTagKeys.create(NamespacedKey("minecraft", "is_ocean")))
 
     fun rtpNow(player: Player, useCooldown: Boolean = true) {
-        if (useCooldown && player.gameMode != GameMode.CREATIVE && player.gameMode != GameMode.SPECTATOR && cooldowns.contains(player.uniqueId)) {
+        if (useCooldown && player.gameMode != GameMode.CREATIVE && player.gameMode != GameMode.SPECTATOR && cooldowns.contains(
+                player.uniqueId
+            )
+        ) {
             Messaging.send(player, "cooldown")
             return
         }
 
         player.scheduler.run(RTP.instance, {
-            for (i in 0 until Settings.maxRolls) {
-                val location = getRandomLocation(player.world)
-                if (PluginHookProvider.dispatchAll(location)) {
-                    player.teleportAsync(location).thenRun {
+            findValidLocation(player.world).thenAccept { loc ->
+                if (loc != null) {
+                    player.teleportAsync(loc).thenAccept {
                         if (useCooldown) applyCooldown(player.uniqueId)
-                        playTeleportEffects(player)
+                        player.scheduler.run(RTP.instance, {
+                            playTeleportEffects(player)
+                        }, null)
                     }
-                    return@run
+                } else {
+                    player.scheduler.run(RTP.instance, {
+                        Messaging.send(player, "no-valid-location")
+                    }, null)
                 }
             }
-
-            Messaging.send(player, "no-valid-location")
         }, null)
     }
 
@@ -93,62 +95,80 @@ object RTPHandler {
         return true
     }
 
-    fun getRandomLocation(world: World): Location {
-        val corner1 = Settings.corner1
-        val corner2 = Settings.corner2
-        val minHeight = world.minHeight
-
-        for (i in 0 until Settings.maxRolls) {
-            val x: Int
-            val z: Int
-
-            if (corner1[0] == corner2[0] && corner1[1] == corner2[1]) {
-                // default to worldborder bounds
-                val border = world.worldBorder
-                val size = border.size / 2
-
-                x = (border.center.x - size + Math.random() * border.size).toInt()
-                z = (border.center.z - size + Math.random() * border.size).toInt()
-            } else {
-                x = (corner1[0] + Math.random() * (corner2[0] - corner1[0])).toInt()
-                z = (corner1[1] + Math.random() * (corner2[1] - corner1[1])).toInt()
-            }
-
-            val chunk =
-                world.getChunkAtAsync(x shr 4, z shr 4).thenApply { it.getChunkSnapshot(true, true, false) }.join()
-            val localX = x and 0xF
-            val localZ = z and 0xF
-            val y = chunk.getHighestBlockYAt(localX, localZ)
-            if (y < minHeight) continue
-            val location = Location(world, x.toDouble(), (y + 1).toDouble(), z.toDouble())
-
-            if (!(isOcean.contains(RegistryKey.BIOME.typedKey(chunk.getBiome(localX, y, localZ).key()))) && chunk.getBlockType(localX, y, localZ).isSolid) {
-                return location
-            }
-        }
-
-        val x: Int
-        val z: Int
-
-        if (corner1[0] == corner2[0] && corner1[1] == corner2[1]) {
-            // default to worldborder bounds
+    private fun getRandomX(world: World): Int {
+        if (Settings.corner1[0] == Settings.corner2[0] && Settings.corner1[1] == Settings.corner2[1]) {
             val border = world.worldBorder
             val size = border.size / 2
-
-            x = (border.center.x - size + Math.random() * border.size).toInt()
-            z = (border.center.z - size + Math.random() * border.size).toInt()
+            return (border.center.x - size + Math.random() * border.size).toInt()
         } else {
-            x = (corner1[0] + Math.random() * (corner2[0] - corner1[0])).toInt()
-            z = (corner1[1] + Math.random() * (corner2[1] - corner1[1])).toInt()
+            return (Settings.corner1[0] + Math.random() * (Settings.corner2[0] - Settings.corner1[0])).toInt()
+        }
+    }
+
+    private fun getRandomZ(world: World): Int {
+        if (Settings.corner1[0] == Settings.corner2[0] && Settings.corner1[1] == Settings.corner2[1]) {
+            val border = world.worldBorder
+            val size = border.size / 2
+            return (border.center.z - size + Math.random() * border.size).toInt()
+        } else {
+            return (Settings.corner1[1] + Math.random() * (Settings.corner2[1] - Settings.corner1[1])).toInt()
+        }
+    }
+
+    private fun findCandidateLocation(world: World, attempt: Int = 0): CompletableFuture<Location> {
+        val minHeight = world.minHeight
+        if (attempt >= Settings.maxRolls) {
+            // fallback
+            val x = getRandomX(world)
+            val z = getRandomZ(world)
+            return world.getChunkAtAsync(x shr 4, z shr 4).thenApply { chunk ->
+                val snap = chunk.getChunkSnapshot(true, false, false)
+                val localX = x and 0xF
+                val localZ = z and 0xF
+                val y = snap.getHighestBlockYAt(localX, localZ)
+                var adjustedY = y + 1
+                if (y < minHeight) adjustedY = minHeight + 1
+                Location(world, x.toDouble(), adjustedY.toDouble(), z.toDouble())
+            }
         }
 
-        val chunk = world.getChunkAtAsync(x shr 4, z shr 4).thenApply { it.getChunkSnapshot(true, false, false) }.join()
-        val localX = x and 0xF
-        val localZ = z and 0xF
-        val y = chunk.getHighestBlockYAt(localX, localZ)
-        var adjustedY = y + 1
-        if (y < minHeight) adjustedY = minHeight + 1
-        return Location(world, x.toDouble(), adjustedY.toDouble(), z.toDouble())
+        val x = getRandomX(world)
+        val z = getRandomZ(world)
+        return world.getChunkAtAsync(x shr 4, z shr 4).thenCompose { chunk ->
+            val snap = chunk.getChunkSnapshot(true, true, false)
+            val localX = x and 0xF
+            val localZ = z and 0xF
+            val y = snap.getHighestBlockYAt(localX, localZ)
+            if (y < minHeight) {
+                findCandidateLocation(world, attempt + 1)
+            } else {
+                val biomeKey = snap.getBiome(localX, y, localZ).key()
+                if (!isOcean.contains(RegistryKey.BIOME.typedKey(biomeKey)) && snap.getBlockType(
+                        localX,
+                        y,
+                        localZ
+                    ).isSolid
+                ) {
+                    CompletableFuture.completedFuture(Location(world, x.toDouble(), (y + 1).toDouble(), z.toDouble()))
+                } else {
+                    findCandidateLocation(world, attempt + 1)
+                }
+            }
+        }
+    }
+
+    private fun findValidLocation(world: World, attempt: Int = 0): CompletableFuture<Location?> {
+        if (attempt >= Settings.maxRolls) {
+            return CompletableFuture.completedFuture(null)
+        }
+
+        return findCandidateLocation(world).thenCompose { location ->
+            if (PluginHookProvider.dispatchAll(location)) {
+                CompletableFuture.completedFuture(location)
+            } else {
+                findValidLocation(world, attempt + 1)
+            }
+        }
     }
 
     fun playTeleportEffects(player: Player) {
