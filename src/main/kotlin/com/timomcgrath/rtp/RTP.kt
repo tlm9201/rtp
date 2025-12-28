@@ -50,8 +50,9 @@ class RTP : JavaPlugin() {
     }
 
     private fun loadMessaging() {
-        saveResource("messages.yml", false)
         val path = File(dataFolder, "messages.yml")
+        if (!path.exists())
+            saveResource("messages.yml", false)
         val config = YamlConfiguration.loadConfiguration(path)
         Messaging.load(config)
     }
